@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<!-- 手机适配的关键一行：让页面宽度等于手机屏幕宽度，不会整页缩小 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ff6b35">
+<title>今天吃什么 · 校园餐品随机推荐</title>
+<link rel="stylesheet" href="styles.css">
+<script>
+  /* 这个判断故意用普通脚本（不是模块），因为文件直接用浏览器双击打开时，
+     模块脚本会被浏览器拦下，页面会一片空白。这里先把原因说出来，省得你猜。 */
+  if (location.protocol === 'file:') {
+    document.addEventListener('DOMContentLoaded', function () {
+      var box = document.getElementById('file-warning');
+      if (box) box.hidden = false;
+    });
+  }
+</script>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="file-warning" class="file-warning" hidden>
+    <strong>请用服务器地址打开这个页面，不要直接双击 index.html。</strong>
+    <p>直接双击打开时浏览器会拦截页面脚本（跨域限制），页面会没有反应。
+       正确做法：在作品目录里运行 <code>node server.js</code>，然后用它打印出来的
+       <code>http://localhost:8000</code> 打开。</p>
+  </div>
+
+  <header class="app-header">
+    <h1>今天吃什么 🍚</h1>
+    <p class="app-subtitle">校园餐品随机推荐 · 先选预算和口味，再让按钮替你做决定</p>
+  </header>
+
+  <section class="panel" aria-labelledby="filters-title">
+    <h2 id="filters-title" class="panel-title">1. 选条件</h2>
+
+    <div class="filters">
+      <div class="filter-group">
+        <h3 class="filter-label" id="label-budget">预算</h3>
+        <div class="chips" id="chips-budget" role="radiogroup" aria-labelledby="label-budget"></div>
+      </div>
+
+      <div class="filter-group">
+        <h3 class="filter-label" id="label-spicy">辣度</h3>
+        <div class="chips" id="chips-spicy" role="radiogroup" aria-labelledby="label-spicy"></div>
+      </div>
+
+      <div class="filter-group">
+        <h3 class="filter-label" id="label-place">地点</h3>
+        <div class="chips" id="chips-place" role="radiogroup" aria-labelledby="label-place"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="action-title">
+    <h2 id="action-title" class="panel-title">2. 让它决定</h2>
+    <button id="recommend-btn" class="primary-btn" type="button">推荐一道 ✨</button>
+    <div class="action-row">
+      <p class="candidate-count" id="candidate-count" aria-live="polite"></p>
+      <button id="reset-btn" class="secondary-btn" type="button">重置筛选</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="result-title">
+    <h2 id="result-title" class="panel-title">3. 结果</h2>
+
+    <div id="result-placeholder" class="result-placeholder">
+      <p>点上面的「推荐一道」按钮，我替你做决定。</p>
+    </div>
+
+    <div id="result-card" class="result-card" hidden aria-live="polite">
+      <p class="result-label" id="result-label">就决定是它了</p>
+      <p class="result-name" id="result-name"></p>
+      <p class="result-note" id="result-note"></p>
+      <ul class="result-meta">
+        <li><span class="meta-key">价格</span><span class="meta-value" id="result-price"></span></li>
+        <li><span class="meta-key">地点</span><span class="meta-value" id="result-place"></span></li>
+        <li><span class="meta-key">辣度</span><span class="meta-value" id="result-spicy"></span></li>
+        <li><span class="meta-key">类型</span><span class="meta-value" id="result-type"></span></li>
+      </ul>
+      <p class="result-tip" id="result-tip" hidden></p>
+    </div>
+
+    <div id="result-empty" class="result-empty" hidden aria-live="polite">
+      <p class="empty-title">😕 没有符合条件的餐品</p>
+      <p class="empty-desc">当前条件：<strong id="empty-criteria"></strong></p>
+      <p class="empty-suggest" id="empty-suggest"></p>
+      <button id="empty-relax-btn" class="secondary-btn" type="button">一键放宽条件</button>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="history-title">
+    <h2 id="history-title" class="panel-title">最近推荐过</h2>
+    <ol class="history-list" id="history-list"></ol>
+    <p class="history-empty" id="history-empty">还没有推荐记录，先去点一下按钮吧。</p>
+    <button id="clear-history-btn" class="secondary-btn history-clear" type="button">清空推荐记录</button>
+  </section>
+
+  <p class="storage-note">
+    <strong>数据说明：</strong>你选的筛选条件、最近 3 次推荐记录，都只保存在<strong>当前这台设备的浏览器</strong>里
+    （localStorage）。手机和电脑的本地存储是各自独立的：<strong>手机上点过什么，电脑上看不到；电脑上选的筛选条件，手机上也不会同步。</strong>
+    换浏览器、清理浏览器数据或换设备，这些记录都不会跟着走。
+  </p>
+
+  <footer class="app-footer">
+    <p>项目 2 作品 · 纯 HTML / CSS / JavaScript · 不联网也能用 · 全部餐品均为虚构</p>
+  </footer>
+
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,336 @@
+/* styles.css —— 移动优先（先写手机样式，宽屏再用媒体查询增强）
+ *
+ * 三条硬约束，来自作业要求：
+ *   1) 不出现非必要的横向滚动 → 所有容器 box-sizing:border-box、可换行、长文本能断行；
+ *   2) 按钮方便手指点击 → 最小高度 44px（主按钮 64px），字号不小于 15px；
+ *   3) 核心功能不依赖鼠标悬停 → 状态用 .is-active / aria-pressed 表示，不用 :hover 才显示的内容。
+ */
+
+:root {
+  --bg: #f4f6fb;
+  --card: #ffffff;
+  --text: #1f2937;
+  --muted: #6b7280;
+  --line: #e2e6ee;
+  --brand: #ff6b35;
+  --brand-dark: #e8501c;
+  --brand-soft: #fff1eb;
+  --radius: 16px;
+  --shadow: 0 6px 20px rgba(31, 41, 55, 0.07);
+}
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+  font-size: 16px;
+  line-height: 1.6;
+  overflow-x: hidden; /* 兜底：万一有元素越界，也不会把整页推成横向滚动 */
+}
+
+.wrap {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 14px 44px;
+  padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+}
+
+/* ---------- 顶部标题 ---------- */
+.app-header { padding: 8px 4px 4px; }
+
+.app-header h1 {
+  margin: 0;
+  font-size: clamp(24px, 7vw, 34px);
+  line-height: 1.25;
+  letter-spacing: 0.5px;
+}
+
+.app-subtitle {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+/* ---------- 卡片式分区 ---------- */
+.panel {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 14px;
+  margin-top: 14px;
+}
+
+.panel-title {
+  margin: 0 0 12px;
+  font-size: 16px;
+  color: var(--brand-dark);
+  letter-spacing: 0.5px;
+}
+
+/* ---------- 筛选 ---------- */
+.filters { display: grid; gap: 14px; }
+
+.filter-label {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: 44px;            /* 手指点得中 */
+  padding: 10px 16px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  touch-action: manipulation;  /* 去掉手机上 300ms 点击延迟 */
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color .15s, color .15s, border-color .15s, transform .08s;
+}
+
+.chip:active { transform: scale(0.96); }
+
+.chip[aria-pressed="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ---------- 主按钮与次要按钮 ---------- */
+.primary-btn {
+  display: block;
+  width: 100%;
+  min-height: 64px;            /* 大而明显，方便手指点 */
+  padding: 16px;
+  font-family: inherit;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand), #ff9f1c);
+  border: none;
+  border-radius: 18px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 8px 18px rgba(255, 107, 53, 0.32);
+  transition: transform .08s, box-shadow .15s, filter .15s;
+}
+
+.primary-btn:active {
+  transform: translateY(1px) scale(0.995);
+  filter: brightness(0.96);
+}
+
+.primary-btn.is-tapped { animation: tap-flash .25s ease-out; }
+
+.secondary-btn {
+  min-height: 44px;
+  padding: 10px 16px;
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+  border: 1px solid #ffd7c6;
+  border-radius: 12px;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.secondary-btn:active { transform: scale(0.97); }
+
+.action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.candidate-count {
+  margin: 0;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+/* ---------- 结果 ---------- */
+.result-placeholder {
+  padding: 22px 16px;
+  text-align: center;
+  color: var(--muted);
+  background: #fafbff;
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+}
+
+.result-placeholder p { margin: 0; }
+
+.result-card {
+  padding: 18px 16px;
+  background: linear-gradient(160deg, #fff6f1, #fffdfb);
+  border: 1px solid #ffdcc9;
+  border-radius: 14px;
+}
+
+.result-card.is-revealing { animation: pop-in .26s ease-out; }
+
+.result-label {
+  margin: 0 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--brand-dark);
+}
+
+.result-name {
+  margin: 0;
+  font-size: clamp(24px, 8vw, 34px);   /* 手机上也很醒目 */
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.result-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.result-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.result-meta li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #ffe3d5;
+  border-radius: 10px;
+}
+
+.meta-key { font-size: 12px; color: var(--muted); }
+.meta-value { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+
+.result-tip {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+}
+
+/* ---------- 空结果 ---------- */
+.result-empty {
+  padding: 18px 16px;
+  text-align: center;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+}
+
+.empty-title { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+.empty-desc { margin: 0 0 8px; font-size: 14px; color: var(--muted); overflow-wrap: anywhere; }
+.empty-suggest { margin: 0 0 12px; font-size: 15px; }
+
+/* ---------- 历史记录 ---------- */
+.history-list {
+  margin: 0;
+  padding-left: 22px;
+  font-size: 15px;
+}
+
+.history-list li { margin-bottom: 4px; overflow-wrap: anywhere; }
+.history-empty { margin: 0; color: var(--muted); font-size: 14px; }
+.history-clear { margin-top: 12px; }
+
+/* ---------- 数据说明 ---------- */
+.storage-note {
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #3730a3;
+  background: #eef2ff;
+  border-left: 4px solid #6366f1;
+  border-radius: 10px;
+}
+
+.app-footer {
+  margin-top: 18px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* ---------- 双击打开时的警告 ---------- */
+.file-warning {
+  margin-bottom: 14px;
+  padding: 14px;
+  font-size: 14px;
+  color: #7f1d1d;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+}
+
+.file-warning p { margin: 8px 0 0; }
+.file-warning code { background: #fff; padding: 1px 5px; border-radius: 5px; }
+
+/* ---------- 动画 ---------- */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes tap-flash {
+  0%   { filter: brightness(1); }
+  50%  { filter: brightness(1.12); }
+  100% { filter: brightness(1); }
+}
+
+/* 尊重系统的"减少动态效果"设置 */
+@media (prefers-reduced-motion: reduce) {
+  .result-card.is-revealing,
+  .primary-btn.is-tapped { animation: none; }
+}
+
+/* ---------- 宽屏（电脑）增强：手机上是单列，电脑上自动变多列 ---------- */
+@media (min-width: 760px) {
+  .wrap { padding: 28px 24px 56px; }
+  .panel { padding: 20px; margin-top: 18px; }
+
+  /* 三组筛选在电脑上并排，手机上自动堆成一列 —— 作业要求"电脑多列、手机单列" */
+  .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+  .result-meta { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+  .primary-btn { font-size: 22px; }
+}
