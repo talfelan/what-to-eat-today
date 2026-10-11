@@ -70,7 +70,10 @@
     <button id="recommend-btn" class="primary-btn" type="button">推荐一道 ✨</button>
     <div class="action-row">
       <p class="candidate-count" id="candidate-count" aria-live="polite"></p>
-      <button id="reset-btn" class="secondary-btn" type="button">重置筛选</button>
+      <div class="btn-pair">
+        <button id="reroll-btn" class="secondary-btn" type="button">重新推荐</button>
+        <button id="reset-btn" class="secondary-btn" type="button">重置筛选</button>
+      </div>
     </div>
 
     <div id="result-card" class="result-card" hidden aria-live="polite">
@@ -89,6 +92,7 @@
     </div>
 
     <p class="tiny-note">点亮红心能提高下次推荐的概率，点亮差评会降低</p>
+    <p class="tiny-note">「重新推荐」＝不想吃它，会降权；再点「推荐一道」只是换一道，权重不动</p>
   </section>
 
   <!-- 六 · 推荐记录与反馈 -->
@@ -99,7 +103,10 @@
       <ol id="history-list" class="history-list"></ol>
       <p id="history-empty" class="history-empty">还没有推荐记录，先去点一下按钮吧。</p>
     </div>
-    <p class="tiny-note">数据仅绑定单一设备，不同设备数据不互通</p>
+    <p class="tiny-note">数据仅绑定单一浏览器，不同浏览器的数据不互通 ·
+      <button id="ledger-reset-btn" class="link-btn" type="button">好感重置</button>
+      <span id="ledger-status" class="ledger-status" aria-live="polite"></span>
+    </p>
   </section>
 
   <footer class="app-footer">

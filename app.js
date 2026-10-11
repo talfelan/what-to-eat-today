@@ -18,6 +18,7 @@ import {
   normalizeCriteria, filterDishes, pickDish, describeCriteria, suggestRelaxation, priceTiers,
   zonesInUse, floorsInUse, floorLabel, taxonomyInUse, flavorCoverage, stapleOf, taxonomyLabel,
   emptyLedger, normalizeLedger, ledgerAdd, ledgerRemove, ledgerHas, ledgerCount, ledgerPrune,
+  ledgerTotal, ledgerResetRecent, LEDGER_RESET_DAYS,
   weightTable, pickProbability, WEIGHT_RULES, weightOf, COOLDOWN_LADDER,
 } from './logic.js';
 
@@ -101,7 +102,10 @@ const dom = {
   },
   floorBox: $('floor-box'),
   recommendBtn: $('recommend-btn'),
+  rerollBtn: $('reroll-btn'),
   resetBtn: $('reset-btn'),
+  ledgerResetBtn: $('ledger-reset-btn'),
+  ledgerStatus: $('ledger-status'),
   candidateCount: $('candidate-count'),
   card: $('result-card'),
   name: $('result-name'),
@@ -338,6 +342,31 @@ function recordSkip(row) {
   return true;
 }
 
+/**
+ * 「好感重置」：只清空**最近 7 天**造成的权重变化，更早的偏好保留。
+ *
+ * 为什么需要它：踩与跳过会长期压低一道菜；如果只是「这几天不想吃」，不该被永久记账。
+ */
+function resetRecentPreference() {
+  const before = ledgerTotal(ledger);
+  ledger = ledgerResetRecent(ledger, LEDGER_RESET_DAYS);
+  saveJSON(LEDGER_KEY, ledger);
+  // 历史行上的实心图标是账本快照；重置后要跟着账本重算，否则会出现「账本清了、图标还亮着」
+  history = history.map((r) => ({
+    ...r,
+    acted: { hearts: ledgerHas(ledger, r.id, 'hearts') ? 1 : 0, downs: ledgerHas(ledger, r.id, 'downs') ? 1 : 0 },
+  }));
+  saveHistory();
+  renderHistory();
+  const removed = before - ledgerTotal(ledger);
+  if (dom.ledgerStatus) {
+    dom.ledgerStatus.textContent = removed > 0
+      ? `已清空最近 ${LEDGER_RESET_DAYS} 天的 ${removed} 条偏好`
+      : `最近 ${LEDGER_RESET_DAYS} 天没有偏好记录`;
+  }
+  return removed;
+}
+
 /* ---------------- 推荐记录：两态渲染 ---------------- */
 
 function makeActButton(row, kind, label, svg) {
@@ -405,7 +434,16 @@ function saveHistory() {
 
 /* ---------------- 推荐 ---------------- */
 
-function recommend() {
+/**
+ * 推荐一道（`reroll` 为 false）／重新推荐（`reroll` 为 true）。
+ *
+ * 两者的区别只在**权重**上：
+ *   · 再点「推荐一道」＝只是换一道（重摇），**不动权重** —— 手快点几下不该被记账；
+ *   · 「重新推荐」＝明确表示“这道我不想吃”（又不想给它差评），记一次**跳过**，力度与过去「推荐一道」一致。
+ * 两者的共同点：都能刷新推荐结果、都会把新菜记进推荐记录（也就进入了冷却窗口）。
+ */
+function recommend(opts = {}) {
+  const reroll = opts.reroll === true;
   const candidates = filterDishes(DISHES, criteria);
   if (candidates.length === 0) {
     showEmpty();
@@ -415,10 +453,13 @@ function recommend() {
   const weights = currentWeights();
   // 最近推荐过的菜：交给软冷却按名次压低（不再硬排除）；点过红心的提前释放、点过差评的窗内再加重
   const recentIds = history.slice(0, COOLDOWN_LADDER.length).map((r) => r.id);
-  const { dish, reason } = pickDish(candidates, weights, recentIds, Math.random, {
-    likedIds: Object.keys(ledger.hearts || {}),
-    dislikedIds: Object.keys(ledger.downs || {}),
+  const likedIds = new Set();
+  const dislikedIds = new Set();
+  Object.values(ledger.days || {}).forEach((bucket) => {
+    Object.keys(bucket.hearts).forEach((id) => likedIds.add(id));
+    Object.keys(bucket.downs).forEach((id) => dislikedIds.add(id));
   });
+  const { dish, reason } = pickDish(candidates, weights, recentIds, Math.random, { likedIds, dislikedIds });
   if (!dish) {
     showEmpty();
     return null;
@@ -426,12 +467,17 @@ function recommend() {
 
   const now = Date.now();
   const previous = history[0];
+  if (reroll && previous) recordSkip(previous);          // 「重新推荐」才记跳过
 
-  if (previous && now - previous.at < MERGE_MS && !previous.acted.hearts && !previous.acted.downs && previous.id !== dish.id) {
-    // 连点合并：上一条还没被真正看过（存活不足 700ms 且未表态）⇒ 直接被取代，不记跳过、不刷屏
+  const mergeable = previous
+    && now - previous.at < MERGE_MS
+    && !previous.acted.hearts && !previous.acted.downs
+    && previous.id !== dish.id;
+
+  if (mergeable && !reroll) {
+    // 连点合并：上一条还没被真正看过（存活不足 700ms 且未表态）⇒ 直接被取代，不刷屏
     history[0] = { id: dish.id, name: dish.name, storeName: dish.storeName || '', price: dish.price, at: now, acted: { hearts: 0, downs: 0 } };
   } else {
-    if (previous && now - previous.at >= MERGE_MS) recordSkip(previous);   // 真正被跳过的那一道才掉权
     history.unshift({ id: dish.id, name: dish.name, storeName: dish.storeName || '', price: dish.price, at: now, acted: { hearts: 0, downs: 0 } });
     if (history.length > HISTORY_LIMIT) history = history.slice(0, HISTORY_LIMIT);
   }
@@ -481,6 +527,11 @@ function resetFilters() {
 /* ---------------- 事件绑定 ---------------- */
 
 dom.recommendBtn.addEventListener('click', () => recommend());
+dom.rerollBtn.addEventListener('click', () => recommend({ reroll: true }));
+dom.ledgerResetBtn.addEventListener('click', () => {
+  if (!confirm(`清空最近 ${LEDGER_RESET_DAYS} 天的偏好？更早的偏好会保留。`)) return;
+  resetRecentPreference();
+});
 dom.resetBtn.addEventListener('click', () => resetFilters());
 
 dom.emptyRelaxBtn.addEventListener('click', () => {
@@ -561,13 +612,18 @@ window.__whatToEat = {
   getHistory: () => history.map((r) => ({ ...r, acted: { ...r.acted } })),
   weightOfDish: (id) => {
     const dish = DISHES.find((d) => d.id === id);
-    return dish ? weightOf(dish.weightBase, (currentWeights().get(id) !== undefined
-      ? { hearts: ledger.hearts[id] || 0, downs: ledger.downs[id] || 0, skips: ledger.skips[id] || 0 }
-      : {})) : null;
+    if (!dish) return null;
+    return weightOf(dish.weightBase, {
+      hearts: ledgerCount(ledger, id, 'hearts'),
+      downs: ledgerCount(ledger, id, 'downs'),
+      skips: ledgerCount(ledger, id, 'skips'),
+    });
   },
   weights: () => Object.fromEntries(currentWeights()),
   recommend,
+  reroll: () => recommend({ reroll: true }),
   resetFilters,
+  resetRecentPreference,
   clearHistory() { history = []; saveHistory(); renderHistory(); },
   clearLedger() { ledger = emptyLedger(); saveJSON(LEDGER_KEY, ledger); renderHistory(); },
   openFull,

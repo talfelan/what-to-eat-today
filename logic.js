@@ -83,56 +83,107 @@ export function weightOf(baseWeight, counts = {}, rules = WEIGHT_RULES) {
 /* ============================ 偏好账本（按设备） ============================ */
 
 /**
- * 账本 = { v, hearts: {菜品id: 次数}, downs: {...}, skips: {...} }，只存在各自浏览器的 localStorage。
+ * 账本 = { v:4, days: { 'YYYY-MM-DD': { hearts:{菜品id:次数}, downs:{…}, skips:{…} } } }，
+ * 只存在各自浏览器的 localStorage。
  *
  * 三态各自独立记「次数」：
- *   hearts = 点亮红心（喜欢）；downs = 点亮差评（不想再看到）；skips = 被换掉（未表态就点了下一次推荐）
+ *   hearts = 点亮红心（喜欢）；downs = 点亮差评（不想再看到）；skips = 「重新推荐」换掉的那一道
  *
- * 为什么按「次数」而不是存整条事件流：权重只取决于次数；体积有界（菜品数 × 3）；
- * 菜品 id 在导入器里是永久继承的 ⇒ 菜单更新、调价、加菜之后账本依然有效。
+ * 为什么**按天分桶**（2026-10-11 从「一个扁平计数」升到 v4）：页面要提供「好感重置」——
+ * 只清空**最近 7 天**造成的权重变化。扁平计数没有时间信息，表达不出「近 7 天」。
+ * 分桶后：权重仍是所有桶求和（行为不变），而重置只要丢掉窗口内的桶即可（精确、可测试）。
  * 为什么放在纯逻辑层：命令行测试能直接断言账本行为（含两台设备互不影响），页面只负责读写存储。
  */
-export const LEDGER_VERSION = 3;
+export const LEDGER_VERSION = 4;
 export const LEDGER_KINDS = ['hearts', 'downs', 'skips'];
+/** 老桶最多留这么久（权重够用，又不会无限膨胀） */
+export const LEDGER_KEEP_DAYS = 180;
+/** 「好感重置」默认清空的窗口 */
+export const LEDGER_RESET_DAYS = 7;
 
-export function emptyLedger() {
-  return { v: LEDGER_VERSION, hearts: {}, downs: {}, skips: {} };
+const DAY_MS = 86400000;
+const pad2 = (n) => String(n).padStart(2, '0');
+/** 本地日历日（YYYY-MM-DD） */
+export function ledgerDay(when = Date.now()) {
+  const d = new Date(when);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+/** 日期串加减天数（只做「日」的整数运算，用 UTC 计算避开夏令时） */
+function shiftDay(day, delta) {
+  const [y, m, d] = String(day).split('-').map(Number);
+  const t = new Date(Date.UTC(y, (m || 1) - 1, d || 1) + delta * DAY_MS);
+  return `${t.getUTCFullYear()}-${pad2(t.getUTCMonth() + 1)}-${pad2(t.getUTCDate())}`;
 }
 
-/** 清洗任何来路不明的账本（旧版本 / 被手改过 / 存坏的），旧版只有 hearts 也能平滑迁移 */
-export function normalizeLedger(raw) {
-  const next = emptyLedger();
-  if (!raw || typeof raw !== 'object') return next;
+export function emptyLedger() {
+  return { v: LEDGER_VERSION, days: {} };
+}
+
+/** 单个桶的清洗：只留合法 id 与正整数次数 */
+function cleanBucket(raw) {
+  const bucket = { hearts: {}, downs: {}, skips: {} };
   LEDGER_KINDS.forEach((kind) => {
-    const source = raw[kind] && typeof raw[kind] === 'object' ? raw[kind] : {};
+    const source = raw && raw[kind] && typeof raw[kind] === 'object' ? raw[kind] : {};
     Object.entries(source).forEach(([id, n]) => {
       const count = Math.floor(Number(n));
-      if (typeof id === 'string' && id && Number.isFinite(count) && count > 0) next[kind][id] = count;
+      if (typeof id === 'string' && id && Number.isFinite(count) && count > 0) bucket[kind][id] = count;
     });
   });
+  return bucket;
+}
+
+const bucketEmpty = (bucket) => LEDGER_KINDS.every((k) => Object.keys(bucket[k]).length === 0);
+
+/**
+ * 清洗任何来路不明的账本（旧版本 / 被手改过 / 存坏的）。
+ * v3（扁平计数、没有日期）平滑迁移：按「今天」入桶 —— 站点上线不久，这些计数实际就是最近发生的。
+ */
+export function normalizeLedger(raw, when = Date.now()) {
+  const next = emptyLedger();
+  if (!raw || typeof raw !== 'object') return next;
+  if (raw.days && typeof raw.days === 'object') {
+    Object.entries(raw.days).forEach(([day, bucket]) => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+      const clean = cleanBucket(bucket);
+      if (!bucketEmpty(clean)) next.days[day] = clean;
+    });
+    return next;
+  }
+  const legacy = cleanBucket(raw);                 // v3 及更早：扁平计数
+  if (!bucketEmpty(legacy)) next.days[ledgerDay(when)] = legacy;
   return next;
 }
 
 /** 记一次表态（kind: hearts | downs | skips），返回新账本（不改动传入对象） */
-export function ledgerAdd(ledger, dishId, kind = 'hearts') {
-  const next = normalizeLedger(ledger);
+export function ledgerAdd(ledger, dishId, kind = 'hearts', when = Date.now()) {
+  const next = normalizeLedger(ledger, when);
   if (typeof dishId !== 'string' || !dishId || !LEDGER_KINDS.includes(kind)) return next;
-  next[kind][dishId] = (next[kind][dishId] || 0) + 1;
+  const day = ledgerDay(when);
+  if (!next.days[day]) next.days[day] = { hearts: {}, downs: {}, skips: {} };
+  next.days[day][kind][dishId] = (next.days[day][kind][dishId] || 0) + 1;
   return next;
 }
 
-/** 撤销一次：再点一次实心图标 = 反悔，净零写入（给误点留出口） */
+/** 撤销一次：再点一次实心图标 = 反悔，净零写入（给误点留出口）；从最近的桶往前找 */
 export function ledgerRemove(ledger, dishId, kind = 'hearts') {
   const next = normalizeLedger(ledger);
-  if (!LEDGER_KINDS.includes(kind) || !next[kind][dishId]) return next;
-  next[kind][dishId] -= 1;
-  if (next[kind][dishId] <= 0) delete next[kind][dishId];
+  if (!LEDGER_KINDS.includes(kind)) return next;
+  const days = Object.keys(next.days).sort().reverse();
+  for (const day of days) {
+    if (next.days[day][kind][dishId]) {
+      next.days[day][kind][dishId] -= 1;
+      if (next.days[day][kind][dishId] <= 0) delete next.days[day][kind][dishId];
+      if (bucketEmpty(next.days[day])) delete next.days[day];
+      break;
+    }
+  }
   return next;
 }
 
 export function ledgerCount(ledger, dishId, kind = 'hearts') {
   const clean = normalizeLedger(ledger);
-  return LEDGER_KINDS.includes(kind) ? (clean[kind][dishId] || 0) : 0;
+  if (!LEDGER_KINDS.includes(kind)) return 0;
+  return Object.values(clean.days).reduce((sum, bucket) => sum + (bucket[kind][dishId] || 0), 0);
 }
 
 /** 这道菜在这一类表态上被点过吗（页面据此决定图标空心还是实心） */
@@ -142,31 +193,57 @@ export function ledgerHas(ledger, dishId, kind = 'hearts') {
 
 export function ledgerTotal(ledger) {
   const clean = normalizeLedger(ledger);
-  return LEDGER_KINDS.reduce((sum, kind) => sum + Object.values(clean[kind]).reduce((a, b) => a + b, 0), 0);
+  return Object.values(clean.days).reduce((sum, bucket) => (
+    sum + LEDGER_KINDS.reduce((a, kind) => a + Object.values(bucket[kind]).reduce((x, y) => x + y, 0), 0)
+  ), 0);
 }
 
-/** 账本 → 菜 id 为键的计数表（weightTable / 测试用） */
-export function ledgerToCounts(ledger) {
-  const clean = normalizeLedger(ledger);
+/**
+ * 账本 → 菜 id 为键的计数表（weightTable / 测试用）。
+ * `since` 给出起始日（含）时只统计该日及之后的桶 —— 「好感重置」的窗口语义靠它。
+ */
+export function ledgerToCounts(ledger, { since = null, until = null, when = Date.now() } = {}) {
+  const clean = normalizeLedger(ledger, when);
   const map = new Map();
-  LEDGER_KINDS.forEach((kind) => {
-    Object.keys(clean[kind]).forEach((id) => {
-      if (!map.has(id)) map.set(id, { hearts: 0, downs: 0, skips: 0 });
-      map.get(id)[kind] = clean[kind][id];
+  Object.keys(clean.days).forEach((day) => {
+    if (since && day < since) return;
+    if (until && day > until) return;
+    const bucket = clean.days[day];
+    LEDGER_KINDS.forEach((kind) => {
+      Object.keys(bucket[kind]).forEach((id) => {
+        if (!map.has(id)) map.set(id, { hearts: 0, downs: 0, skips: 0 });
+        map.get(id)[kind] += bucket[kind][id];
+      });
     });
   });
   return map;
 }
 
-/** 只保留库里还存在的菜（防止手改存储或旧库残留把账本撑大） */
-export function ledgerPrune(ledger, dishes) {
+/**
+ * 「好感重置」：丢掉**最近 days 天**（含今天）的桶，更早的偏好留着。
+ * 返回新账本；调用方负责写回存储。
+ */
+export function ledgerResetRecent(ledger, days = LEDGER_RESET_DAYS, when = Date.now()) {
+  const next = normalizeLedger(ledger, when);
+  const from = shiftDay(ledgerDay(when), -(Math.max(1, Math.floor(days)) - 1));
+  Object.keys(next.days).forEach((day) => { if (day >= from) delete next.days[day]; });
+  return next;
+}
+
+/** 只保留库里还存在的菜，并按 LEDGER_KEEP_DAYS 丢掉过老的桶（防止账本无限膨胀） */
+export function ledgerPrune(ledger, dishes, { keepDays = LEDGER_KEEP_DAYS, when = Date.now() } = {}) {
   const alive = new Set((Array.isArray(dishes) ? dishes : []).map((d) => d.id));
+  const oldest = shiftDay(ledgerDay(when), -keepDays);
+  const clean = normalizeLedger(ledger, when);
   const next = emptyLedger();
-  LEDGER_KINDS.forEach((kind) => {
-    const source = ledger && ledger[kind] && typeof ledger[kind] === 'object' ? ledger[kind] : {};
-    Object.entries(source).forEach(([id, n]) => {
-      if (alive.has(id)) next[kind][id] = n;
+  Object.entries(clean.days).forEach(([day, bucket]) => {
+    if (day < oldest) return;
+    const kept = cleanBucket({
+      hearts: Object.fromEntries(Object.entries(bucket.hearts).filter(([id]) => alive.has(id))),
+      downs: Object.fromEntries(Object.entries(bucket.downs).filter(([id]) => alive.has(id))),
+      skips: Object.fromEntries(Object.entries(bucket.skips).filter(([id]) => alive.has(id))),
     });
+    if (!bucketEmpty(kept)) next.days[day] = kept;
   });
   return next;
 }

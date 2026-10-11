@@ -192,6 +192,35 @@ body {
   flex-wrap: wrap;
 }
 
+/* 成对出现的次级按钮（重新推荐 / 重置筛选）：等宽、同一行，视觉边界对齐 */
+.btn-pair {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  flex: 1 1 220px;
+}
+
+.btn-pair .secondary-btn {
+  flex: 1 1 0;            /* 等宽平分，不再一个宽一个窄 */
+  max-width: 160px;
+}
+
+/* 「好感重置」：低调的链接式按钮，放在数据说明旁边（位置不显眼，避免误点） */
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0 2px;
+  margin-left: 2px;
+  color: var(--brand-dark);
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.ledger-status { margin-left: 6px; color: var(--brand-dark); }
+
 .candidate-count {
   margin: 0;
   color: var(--muted);
