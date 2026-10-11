@@ -70,6 +70,18 @@
     return true;
   }
 
+  /**
+   * 发送用的内容类型必须是 **CORS 简单类型**（text/plain）。
+   *
+   * 2026-10-11 实测（隔离实验，判据是服务端 /healthz 的增量）：
+   *   · sendBeacon + application/json（跨域）→ **事件被浏览器静默丢弃**，而 sendBeacon 仍返回 true
+   *   · sendBeacon + text/plain                     → 送达 ✅
+   *   · fetch keepalive + 任意类型                  → 送达 ✅
+   * 所以这里固定用 text/plain（服务端按 JSON 解析 body，不依赖 content-type）。
+   * 门禁 tools/verify-feedback-gate.mjs 有对应判据，防它回归。
+   */
+  const BEACON_TYPE = 'text/plain;charset=UTF-8';
+
   function enqueue(input) {
     ENDPOINT = resolveEndpoint();
     const event = buildEvent(input && input.dishId, input && input.kind, input && input.action);
@@ -77,8 +89,9 @@
     const nav = root.navigator || {};
     const env = { onLine: nav.onLine, doNotTrack: nav.doNotTrack || root.doNotTrack, sendBeacon: nav.sendBeacon && nav.sendBeacon.bind(nav) };
     if (!shouldSend(env)) return 'skipped';
+    const body = JSON.stringify(event);
     try {
-      const ok = nav.sendBeacon(ENDPOINT, new Blob([JSON.stringify(event)], { type: 'application/json' }));
+      const ok = nav.sendBeacon(ENDPOINT, new Blob([body], { type: BEACON_TYPE }));
       return ok ? 'sent' : 'dropped';
     } catch {
       return 'dropped';                       // 失败静默：绝不重试、绝不入队
