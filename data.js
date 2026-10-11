@@ -5,12 +5,12 @@
  *     node tools/import-menu.mjs      （从 xlsx 重建菜品/权重基准）
  *     node tools/build-data.mjs       （把库编译成这个文件）
  *
- * 生成时间：2026-10-11T13:50:49.005Z
+ * 生成时间：2026-10-11T16:01:09.774Z
  * 数据规模：576 道菜 / 12 家店
  */
 
 export const DATA_META = {
-  "generatedAt": "2026-10-11T13:50:49.005Z",
+  "generatedAt": "2026-10-11T16:01:09.774Z",
   "dishCount": 576,
   "storeCount": 12,
   "priceTiers": [
@@ -65,22 +65,24 @@ export const DATA_META = {
 /** 方位区与楼层（结构预建：库里没有店归属的楼层也留着，为未来预留） */
 export const PLACES = {
   "schemaVersion": 1,
-  "campus": "金陵科技学院 江宁校区",
+  "campus": "江宁校区",
   "note": "方位区 → 楼层 的两层结构。这里只定义「结构」（有哪些区、各区有几层），店的实际归属在 stores.json —— 结构与归属分离，归属缺了不影响结构完整。",
+  "linkPolicy": "url 一律为 null：公开树不保留外部来源链接，只保留标题与引文（数据读数仍来自这几份文件）。",
   "sources": [
     {
-      "title": "关于2021年寒假饮食服务时间安排的通知（金陵科技学院）",
-      "url": "https://www.jit.edu.cn/nry_xxcx.jsp?urltype=news.NewsContentUrl&wbtreeid=1004&wbnewsid=57452",
+      "title": "校内饮食服务时间安排通知（2021 年寒假）",
+      "url": null,
       "quote": "江宁南区一楼食堂 / 江宁南区二楼食堂 / 江宁南区三楼风味及民族餐厅 / 江宁北区一楼食堂 / 江宁北区二楼食堂"
     },
     {
-      "title": "寻味金科，启航新程｜我校第三届美食品鉴活动温情落幕（金陵科技学院）",
-      "url": "https://www.jit.edu.cn/info/1007/150803.htm",
-      "quote": "两校区四大餐厅——江宁校区南苑餐厅、北苑餐厅一楼、北苑餐厅二楼及幕府校区餐厅"
+      "title": "校内第三届美食品鉴活动落幕报道",
+      "url": null,
+      "quote": "江宁校区南苑餐厅、北苑餐厅一楼、北苑餐厅二楼及另一校区餐厅"
     },
     {
-      "title": "金陵科技学院江宁校区南区食堂特色风味窗口合作方遴选项目公开招标公告（NJJC-2026ZB0801）",
-      "quote": "金陵科技学院江宁校区在校生约1.7万名，南区食堂共3层。本项目分为10个标段遴选食堂特色风味窗口委托经营"
+      "title": "江宁校区南区食堂特色风味窗口合作方遴选项目公开招标公告",
+      "url": null,
+      "quote": "江宁校区在校生约1.7万名，南区食堂共3层。本项目分为10个标段遴选食堂特色风味窗口委托经营"
     }
   ],
   "zones": [
@@ -134,8 +136,8 @@ export const PLACES = {
     }
   ],
   "reserved": {
-    "note": "为未来预留：幕府校区有独立餐厅（一楼/二楼），本次数据不含，故不纳入结构；若日后纳入，直接在此追加一个 zone 即可，前端会自动多出一级。",
-    "mufu": [
+    "note": "为未来预留：另一校区有独立餐厅（一楼/二楼），本次数据不含，故不纳入结构；若日后纳入，直接在此追加一个 zone 即可，前端会自动多出一级。",
+    "otherCampus": [
       {
         "level": 1,
         "label": "一楼"
@@ -159,7 +161,7 @@ export const STORES = [
     "zone": "南区食堂",
     "floor": 3,
     "locationSource": "poi",
-    "locationEvidence": "360地图门店地址：南京市江宁区科学园弘景大道99号南区食堂三楼 — https://m.map.360.cn/m/album/detail/pid=92c712e9e0cdf496"
+    "locationEvidence": "地图 POI 门店地址：南区食堂三楼（来源链接已隐去）"
   },
   {
     "id": "s02",
@@ -170,7 +172,7 @@ export const STORES = [
     "zone": "北区食堂",
     "floor": 1,
     "locationSource": "official",
-    "locationEvidence": "金陵科技学院后勤实业总公司 金院后实字(2016)第20号《关于表彰2016服务质量提升年集体项目获奖者的决定》饮食管理服务中心「优质服务窗口」：江宁校区北区一楼：千里香馄饨窗口"
+    "locationEvidence": "后勤实业总公司〔2016〕第20号《关于表彰2016服务质量提升年集体项目获奖者的决定》饮食管理服务中心「优质服务窗口」：江宁校区北区一楼：千里香馄饨窗口"
   },
   {
     "id": "s03",
