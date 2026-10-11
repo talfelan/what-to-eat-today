@@ -1,0 +1,15 @@
+# 这份 netlify.toml 供「Netlify 从 GitHub 仓库自动构建」使用。
+# 与项目根目录那份的区别：这里仓库根目录就是站点根，所以 publish = "."；
+# 项目根那份是给本地 CLI 部署用的（publish = "public"），由 deploy-netlify.bat 调用。
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# 固定网址：/dashboard → 运营者看板
+[[redirects]]
+  from = "/dashboard"
+  to = "/.netlify/functions/operator"
+  status = 200
+
+[functions]
+  node_bundler = "esbuild"

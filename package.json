@@ -1,0 +1,8 @@
+{
+  "name": "what-to-eat-today-site",
+  "private": true,
+  "description": "公网发布树（站点文件 + Netlify 函数）。改动请改上游工程再 build-public.mjs 重新生成。",
+  "dependencies": {
+    "@netlify/blobs": "11.1.4"
+  }
+}
