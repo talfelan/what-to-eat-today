@@ -103,6 +103,18 @@
 
   const apiBase = (endpoint) => String(endpoint || '').replace(/\/report\/?$/, '');
   const getEndpoint = () => localStorage.getItem(LS.endpoint) || '';
+
+  /**
+   * 默认端点：**能从自己的地址推出来就自动填**，省掉每次手打。
+   *   · 页面由 Worker 自己服务（*.workers.dev）⇒ 直接用它自己的 /report
+   *   · 页面放在站点上（GitHub Pages / Netlify）⇒ 用内置的默认 Worker 地址
+   * 用户只需要填一次口令；端点和口令都存这台浏览器的 localStorage，之后不再问。
+   */
+  const DEFAULT_ENDPOINT = (() => {
+    const host = String(location.hostname || '');
+    if (/workers\.dev$/.test(host)) return `${location.origin}/report`;
+    return 'https://what-to-eat-feedback.talfelan.workers.dev/report';
+  })();
   const getToken = () => localStorage.getItem(LS.token) || '';
 
   /* 兼容 Netlify 那套习惯：可用 #token=…&endpoint=… 进来一次（用完立即从地址栏抹掉，不留痕） */
@@ -260,9 +272,9 @@
   }
 
   $('btn-enter').addEventListener('click', () => {
-    const ep = $('in-endpoint').value.trim();
+    const ep = $('in-endpoint').value.trim() || DEFAULT_ENDPOINT;
     const tk = $('in-token').value.trim();
-    if (!ep || !tk) { $('gate-status').textContent = '两项都要填'; return; }
+    if (!tk) { $('gate-status').textContent = '填一下口令就行（端点已自动填好）'; return; }
     localStorage.setItem(LS.endpoint, ep);
     localStorage.setItem(LS.token, tk);
     showMain();
@@ -295,8 +307,10 @@
 
   loadNames();
   absorbHash();
-  if (getEndpoint() && getToken()) showMain();
-  else $('in-endpoint').value = getEndpoint();
+  if (!getEndpoint()) localStorage.setItem(LS.endpoint, DEFAULT_ENDPOINT);   // 端点自动就位
+  $('in-endpoint').value = getEndpoint();
+  if (getToken()) showMain();                                               // 有口令就直接进，不再问第二次
+  else $('gate-status').textContent = '只需填一次口令；之后这台浏览器会记住，不再问。';
 })();
 </script>
 </body>

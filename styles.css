@@ -229,6 +229,11 @@ body {
 /* 没消息时不占位，避免按钮下方多出一条空白 */
 .ledger-status:empty { display: none; }
 
+/* 两个按钮的差别说明：按钮名加粗上色、中间用淡点分隔，长得像一句话而不是两行字 */
+.note-actions { margin-top: 4px; }
+.note-actions b { color: var(--brand-dark); font-weight: 600; }
+.note-actions .dot { color: var(--line); margin: 0 8px; }
+
 .candidate-count {
   margin: 0;
   color: var(--muted);

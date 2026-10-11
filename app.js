@@ -106,7 +106,6 @@ const dom = {
   resetBtn: $('reset-btn'),
   ledgerResetBtn: $('ledger-reset-btn'),
   ledgerStatus: $('ledger-status'),
-  skipCap: $('skip-cap'),
   candidateCount: $('candidate-count'),
   card: $('result-card'),
   name: $('result-name'),
@@ -609,8 +608,6 @@ window.addEventListener('storage', (event) => {
   if (dom.dataDate) {
     dom.dataDate.textContent = `数据更新：${String(DATA_META.generatedAt || '').slice(0, 10)}`;
   }
-  // 注解里的限额从代码取，避免「文案写 12、实现改成 8」这种脱节
-  if (dom.skipCap) dom.skipCap.textContent = String(SKIP_DAILY_CAP);
 
   renderAllControls();
   updateCandidateCount();
