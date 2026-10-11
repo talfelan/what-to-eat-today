@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex, nofollow">
 <title>看板 · 今天吃什么</title>
 <style>
-  :root { --brand:#ff6b35; --line:#e6e6e6; --muted:#8a8a8a; --card:#fff; --bg:#faf7f4; }
+  :root { --brand:#ff6b35; --line:#e6e6e6; --muted:#8a8a8a; --card:#fff; --bg:#faf7f4; --bar:#ffb37a; }
   * { box-sizing: border-box; }
   body { margin:0; padding:16px; background:var(--bg); font:14px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif; color:#232323; }
   h1 { font-size:18px; margin:0 0 4px; }
@@ -23,6 +23,15 @@
   td.num { text-align:right; font-variant-numeric:tabular-nums; }
   .status { min-height:20px; font-size:12px; color:var(--brand); margin:8px 0 0; }
   .muted { color:var(--muted); }
+  .kpis { display:flex; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+  .kpi { flex:1 1 90px; }
+  .kpi b { display:block; font-size:20px; }
+  .kpi span { font-size:12px; color:var(--muted); }
+  .chart { display:flex; align-items:flex-end; gap:4px; height:120px; margin-top:6px; }
+  .chart .col { flex:1 1 0; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:4px; min-width:0; }
+  .chart .bar { width:100%; background:var(--bar); border-radius:4px 4px 0 0; min-height:2px; }
+  .chart .day { font-size:10px; color:var(--muted); white-space:nowrap; }
+  h2 { font-size:13px; color:var(--muted); margin:0 0 6px; font-weight:600; }
   #gate { display:block; }
   #main { display:none; }
 </style>
@@ -53,6 +62,7 @@
         <option value="90">最近 90 天</option>
       </select>
       <button id="btn-refresh" type="button">刷新</button>
+      <button id="btn-csv" type="button">导出 CSV</button>
       <button id="btn-selectall" type="button">全选</button>
       <button id="btn-selectnone" type="button">全不选</button>
       <button id="btn-delselected" type="button" disabled>删除选中</button>
@@ -60,6 +70,13 @@
       <button id="btn-logout" type="button">退出口令</button>
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
+  </div>
+
+  <div class="card">
+    <h2>总览</h2>
+    <div class="kpis" id="kpis"></div>
+    <h2>按天趋势（窗口内）</h2>
+    <div class="chart" id="chart"></div>
   </div>
 
   <div class="card">
@@ -81,17 +98,69 @@
   const LS = { endpoint: 'whatToEat.dash.endpoint', token: 'whatToEat.dash.token', days: 'whatToEat.dash.days' };
   const $ = (id) => document.getElementById(id);
   let rows = [];
+  let byDay = [];
   let names = {};
 
   const apiBase = (endpoint) => String(endpoint || '').replace(/\/report\/?$/, '');
   const getEndpoint = () => localStorage.getItem(LS.endpoint) || '';
   const getToken = () => localStorage.getItem(LS.token) || '';
 
+  /* 兼容 Netlify 那套习惯：可用 #token=…&endpoint=… 进来一次（用完立即从地址栏抹掉，不留痕） */
+  function absorbHash() {
+    const raw = location.hash.replace(/^#/, '');
+    if (!raw) return false;
+    const p = new URLSearchParams(raw);
+    const t = p.get('token');
+    const e = p.get('endpoint') || p.get('url');
+    let used = false;
+    if (t) { localStorage.setItem(LS.token, t); used = true; }
+    if (e) { localStorage.setItem(LS.endpoint, e); used = true; }
+    if (used) history.replaceState(null, '', location.pathname);
+    return used;
+  }
+
   async function loadNames() {
     try { names = await (await fetch('dish-names.json')).json(); } catch { names = {}; }
   }
 
-  function render() {
+  function renderKpis() {
+    const total = rows.reduce((a, r) => a + r.total, 0);
+    const likes = rows.reduce((a, r) => a + r.like, 0);
+    const dislikes = rows.reduce((a, r) => a + r.dislike, 0);
+    $('kpis').innerHTML = '';
+    [['总反馈', total], ['红心', likes], ['踩', dislikes], ['有反馈的菜', rows.length]].forEach(([label, v]) => {
+      const d = document.createElement('div');
+      d.className = 'kpi';
+      const b = document.createElement('b');
+      b.textContent = String(v);
+      const s = document.createElement('span');
+      s.textContent = label;
+      d.append(b, s);
+      $('kpis').appendChild(d);
+    });
+  }
+
+  function renderChart() {
+    const box = $('chart');
+    box.textContent = '';
+    const max = Math.max(1, ...byDay.map((d) => d.total));
+    byDay.forEach((d) => {
+      const col = document.createElement('div');
+      col.className = 'col';
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      bar.style.height = `${Math.round((d.total / max) * 100)}%`;
+      bar.title = `${d.day}：${d.total} 条`;
+      const lab = document.createElement('div');
+      lab.className = 'day';
+      lab.textContent = d.day.slice(5);
+      col.append(bar, lab);
+      box.appendChild(col);
+    });
+    if (!byDay.length) box.textContent = '（窗口内暂无数据）';
+  }
+
+  function renderTable() {
     const tbody = $('tbody');
     tbody.textContent = '';
     $('empty').hidden = rows.length > 0;
@@ -104,11 +173,9 @@
       chk.addEventListener('change', updateButtons);
       td0.appendChild(chk);
       tr.appendChild(td0);
-
       const tdName = document.createElement('td');
       tdName.textContent = names[r.dishId] || r.dishId;
       tr.appendChild(tdName);
-
       [r.net, r.netDown, r.total].forEach((v) => {
         const td = document.createElement('td');
         td.className = 'num';
@@ -145,9 +212,32 @@
       if (!r.ok) { setStatus(`读取失败：${r.status}`); return; }
       const j = await r.json();
       rows = j.rows || [];
-      render();
+      byDay = j.byDay || [];
+      renderKpis();
+      renderChart();
+      renderTable();
       setStatus(`共 ${rows.length} 道菜有反馈（窗口 ${days} 天）`);
     } catch (e) { setStatus('网络或跨域失败：' + (e && e.message)); }
+  }
+
+  function exportCsv() {
+    const head = ['dishId', '菜名', '净红心', '净踩', '总次数', '红心', '撤销红心', '差评', '撤销差评'];
+    const lines = [head.join(',')];
+    rows.forEach((r) => {
+      const name = String(names[r.dishId] || '').replace(/"/g, '""');
+      lines.push([r.dishId, `"${name}"`, r.net, r.netDown, r.total, r.like, r.unlike, r.dislike, r.undislike].join(','));
+    });
+    lines.push('');
+    lines.push(['day', '总数'].join(','));
+    byDay.forEach((d) => lines.push([d.day, d.total].join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `what-to-eat-feedback-${$('sel-days').value}d.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setStatus('已导出 CSV');
   }
 
   async function del(body) {
@@ -178,6 +268,7 @@
     showMain();
   });
   $('btn-refresh').addEventListener('click', fetchData);
+  $('btn-csv').addEventListener('click', exportCsv);
   $('sel-days').addEventListener('change', fetchData);
   $('chk-all').addEventListener('change', (e) => { boxes().forEach((b) => { b.checked = e.target.checked; }); updateButtons(); });
   $('btn-selectall').addEventListener('click', () => { boxes().forEach((b) => { b.checked = true; }); updateButtons(); });
@@ -203,8 +294,9 @@
   });
 
   loadNames();
+  absorbHash();
   if (getEndpoint() && getToken()) showMain();
-  else { $('in-endpoint').value = getEndpoint(); }
+  else $('in-endpoint').value = getEndpoint();
 })();
 </script>
 </body>

@@ -17,6 +17,8 @@ import { getStore } from '@netlify/blobs';
 
 const KINDS = ['like', 'dislike', 'unlike', 'undislike'];
 const EVENT_PREFIX = 'e';
+/** 看板页面已迁到 Cloudflare Worker（D1）：老的 /dashboard 一律跳到这里 */
+const WORKER_DASHBOARD = 'https://what-to-eat-feedback.talfelan.workers.dev/dashboard';
 const COUNTER_PREFIX = 'c';
 const LEGACY_PREFIX = 'day';
 
@@ -74,8 +76,7 @@ const readToken = (req, url, body) => {
   return raw.trim();
 };
 
-export function createHandler({ getStore: getStoreImpl = getStore, operatorToken = null } = {}) {
-  // 生产环境不传 operatorToken：按**请求**读环境变量（部署后改 env 只需重新部署，不必重新打包逻辑）
+export function createHandler({ getStore: getStoreImpl = getStore, operatorToken = null } = {}) {  // 生产环境不传 operatorToken：按**请求**读环境变量（部署后改 env 只需重新部署，不必重新打包逻辑）
   const tokenOf = () => (operatorToken === null ? process.env.OPERATOR_TOKEN : operatorToken);
   return async (req) => {
     const url = new URL(req.url);
@@ -99,10 +100,12 @@ export function createHandler({ getStore: getStoreImpl = getStore, operatorToken
         }
       }
 
-      // 页面本身：**不含 token**（口令由页面问你，存在你自己的浏览器里）
-      return new Response(page(want1(url)), {
-        status: 200,
-        headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store', 'x-robots-tag': 'noindex' },
+      // 看板页面已迁到 Cloudflare Worker（D1 存储、免费额度更高）：
+      // 这里只做 302 跳转，让老的 /dashboard 书签继续可用，旧的 Blobs 页面不再维护。
+      // ?data=1 的 JSON 接口保留（读的是本函数自己的 Blobs，历史数据仍可查）。
+      return new Response(null, {
+        status: 302,
+        headers: { location: WORKER_DASHBOARD, 'cache-control': 'no-store' },
       });
     }
 
