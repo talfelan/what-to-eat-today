@@ -18,7 +18,7 @@ import {
   normalizeCriteria, filterDishes, pickDish, describeCriteria, suggestRelaxation, priceTiers,
   zonesInUse, floorsInUse, floorLabel, taxonomyInUse, flavorCoverage, stapleOf, taxonomyLabel,
   emptyLedger, normalizeLedger, ledgerAdd, ledgerRemove, ledgerHas, ledgerCount, ledgerPrune,
-  weightTable, pickProbability, WEIGHT_RULES, weightOf,
+  weightTable, pickProbability, WEIGHT_RULES, weightOf, COOLDOWN_LADDER,
 } from './logic.js';
 
 /* ---------------- 常量 ---------------- */
@@ -232,7 +232,7 @@ function showResult(dish, meta) {
   const tags = tasteTags(dish);
   dom.meta.textContent = [dish.storeName || '', ...tags].filter(Boolean).join(' · ');
   if (meta.reason === 'repeated') {
-    dom.tip.textContent = '符合条件的餐品都快轮过一遍了，这次是重复的。放宽一点条件能换个花样。';
+    dom.tip.textContent = '符合条件的餐品不多，而且都刚推荐过 —— 这次会是其中一道。放宽一点条件能换个花样。';
     dom.tip.hidden = false;
   } else {
     dom.tip.hidden = true;
@@ -413,8 +413,12 @@ function recommend() {
   }
 
   const weights = currentWeights();
-  const recentIds = history.slice(0, 5).map((r) => r.id);
-  const { dish, reason } = pickDish(candidates, weights, recentIds, Math.random);
+  // 最近推荐过的菜：交给软冷却按名次压低（不再硬排除）；点过红心的提前释放、点过差评的窗内再加重
+  const recentIds = history.slice(0, COOLDOWN_LADDER.length).map((r) => r.id);
+  const { dish, reason } = pickDish(candidates, weights, recentIds, Math.random, {
+    likedIds: Object.keys(ledger.hearts || {}),
+    dislikedIds: Object.keys(ledger.downs || {}),
+  });
   if (!dish) {
     showEmpty();
     return null;
@@ -438,7 +442,7 @@ function recommend() {
 
   const w = weights.get(dish.id);
   if (Number.isFinite(w)) {
-    // 给自动测试与排查留的读数：这道菜当前权重 / 在候选集里的理论占比
+    // 给自动测试与排查留的读数：这道菜当前权重 / 在候选集里的理论占比（**冷却前的占比**）
     dom.card.dataset.weight = String(w);
     dom.card.dataset.share = pickProbability(dish.id, candidates, weights).toFixed(4);
   }

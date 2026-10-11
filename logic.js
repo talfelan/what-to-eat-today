@@ -306,43 +306,82 @@ export function flavorCoverage(dishes) {
 /* ============================ 推荐 ============================ */
 
 /**
- * 加权随机：p = w / Σw（在候选集内归一）。
+ * 冷却档位：rank 1 = 最近推荐过的那一道。**软冷却**（2026-10-11 由硬排除改来，系数经月确认）。
+ *
+ * 为什么不再用硬排除：候选池小的时候（例如「主食=饼」只有 5 道）会把「新鲜池」打到 0，
+ * 于是从「绝对避开」一步跳到「完全不避开」—— 不是渐变，是崩塌；实测占比：全库 576 道时
+ * 硬排除 = 0.00%，软冷却 = 0.32%；「小吃」（26 道）0.00% → 7.89%。见 tools/sim-cooldown.mjs。
+ */
+export const COOLDOWN_LADDER = [0.02, 0.08, 0.2, 0.5, 1];
+/** 点过红心 ⇒ **提前释放**：只有「刚出现过的那一道」仍按第一档压（防连点），往后不再压 */
+export const COOLDOWN_LIKED_FACTOR_BY_RANK = (rank, ladder) => (rank > 0 ? 1 : ladder[0]);
+/** 点过差评 ⇒ **窗内再加重**（窗外由权重机制自己负责，这里不重复计） */
+export const COOLDOWN_DISLIKED_FACTOR = 0.3;
+
+/**
+ * 冷却系数：给出这道菜在「最近推荐」里的名次，返回它的权重乘数。
+ * rank 为 null 或超出窗口 ⇒ 1（不在冷却里，不动）。
+ */
+export function cooldownCoef(rank, { liked = false, disliked = false } = {}, ladder = COOLDOWN_LADDER) {
+  if (rank === null || rank === undefined || rank < 0 || rank >= ladder.length) return 1;
+  let coef = liked ? COOLDOWN_LIKED_FACTOR_BY_RANK(rank, ladder) : ladder[rank];
+  if (disliked) coef *= COOLDOWN_DISLIKED_FACTOR;
+  return coef;
+}
+
+/**
+ * 加权随机：p = w / Σw（在候选集内归一）。**冷却只改系数，不从池子里删菜**。
  *
  * - weightById：菜 id → 权重（由 weightTable 算出）
- * - recentIds：最近推荐过的菜 id，优先避开（沿用上一版的「进阶挑战」行为）
+ * - recentIds：最近推荐过的菜 id，**按由近到远排序**；越近压低越多，越远越快回升
  * - random：随机数函数，默认 Math.random；测试里换成固定序列即可复现
+ * - feedback：{ likedIds, dislikedIds }（本机账本）—— 点过红心的提前释放、点过差评的窗内再加重
  *
- * 返回 { dish, reason, repeated }
- *   reason = 'ok' | 'repeated'（候选都用过了）| 'empty'（没有候选）
+ * 返回 { dish, reason, repeated, totalWeight, cooldownWeight }
+ *   reason = 'ok' | 'repeated'（**所有**候选都在冷却窗内，必然重复）| 'empty'（没有候选）
+ *   cooldownWeight ＝ 候选里处于冷却窗内那几道菜的（乘系数后的）权重合计，供测试与诊断
  */
-export function pickDish(candidates, weightById, recentIds = [], random = Math.random) {
+export function pickDish(candidates, weightById, recentIds = [], random = Math.random, feedback = {}) {
   if (!Array.isArray(candidates) || candidates.length === 0) {
-    return { dish: null, reason: 'empty', repeated: false, totalWeight: 0 };
+    return { dish: null, reason: 'empty', repeated: false, totalWeight: 0, cooldownWeight: 0 };
   }
-  const recent = new Set(recentIds);
-  const fresh = candidates.filter((d) => !recent.has(d.id));
-  const pool = fresh.length > 0 ? fresh : candidates;
+  const rankOf = new Map();
+  recentIds.forEach((id, i) => { if (!rankOf.has(id)) rankOf.set(id, i); });   // 同一道菜重复出现时取更近的名次
+  const asSet = (v) => (v instanceof Set ? v : new Set(Array.isArray(v) ? v : []));
+  const liked = asSet(feedback.likedIds);
+  const disliked = asSet(feedback.dislikedIds);
 
   const weightOf = (d) => {
-    const w = weightById instanceof Map ? weightById.get(d.id) : undefined;
-    return Number.isFinite(w) && w > 0 ? w : WEIGHT_RULES.base;
+    const raw = weightById instanceof Map ? weightById.get(d.id) : undefined;
+    const base = Number.isFinite(raw) && raw > 0 ? raw : WEIGHT_RULES.base;
+    const rank = rankOf.has(d.id) ? rankOf.get(d.id) : null;
+    return base * cooldownCoef(rank, { liked: liked.has(d.id), disliked: disliked.has(d.id) });
   };
-  const total = pool.reduce((sum, d) => sum + weightOf(d), 0);
+
+  let total = 0;
+  let cooldownWeight = 0;
+  for (const d of candidates) {
+    const w = weightOf(d);
+    total += w;
+    if (rankOf.has(d.id)) cooldownWeight += w;
+  }
 
   // 走「按权重扣减」的经典写法：随机点落在哪个区间就取哪一道。
   // random() 理论上不会返回 1，仍然用兜底保证不越界。
   let r = Math.min(Math.max(Number(random()), 0), 1) * total;
-  let picked = pool[pool.length - 1];
-  for (const d of pool) {
+  let picked = candidates[candidates.length - 1];
+  for (const d of candidates) {
     r -= weightOf(d);
     if (r < 0) { picked = d; break; }
   }
 
+  const freshCount = candidates.filter((d) => !rankOf.has(d.id)).length;
   return {
     dish: picked,
-    reason: fresh.length > 0 ? 'ok' : 'repeated',
-    repeated: fresh.length === 0,
+    reason: freshCount > 0 ? 'ok' : 'repeated',
+    repeated: freshCount === 0,
     totalWeight: total,
+    cooldownWeight,
   };
 }
 
