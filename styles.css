@@ -219,7 +219,15 @@ body {
   cursor: pointer;
 }
 
-.ledger-status { margin-left: 6px; color: var(--brand-dark); }
+.ledger-status {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--brand-dark);
+}
+
+/* 没消息时不占位，避免按钮下方多出一条空白 */
+.ledger-status:empty { display: none; }
 
 .candidate-count {
   margin: 0;

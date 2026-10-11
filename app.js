@@ -18,7 +18,7 @@ import {
   normalizeCriteria, filterDishes, pickDish, describeCriteria, suggestRelaxation, priceTiers,
   zonesInUse, floorsInUse, floorLabel, taxonomyInUse, flavorCoverage, stapleOf, taxonomyLabel,
   emptyLedger, normalizeLedger, ledgerAdd, ledgerRemove, ledgerHas, ledgerCount, ledgerPrune,
-  ledgerTotal, ledgerResetRecent, LEDGER_RESET_DAYS,
+  ledgerTotal, ledgerResetRecent, LEDGER_RESET_DAYS, ledgerAddSkip, skipsToday, SKIP_DAILY_CAP,
   weightTable, pickProbability, WEIGHT_RULES, weightOf, COOLDOWN_LADDER,
 } from './logic.js';
 
@@ -106,6 +106,7 @@ const dom = {
   resetBtn: $('reset-btn'),
   ledgerResetBtn: $('ledger-reset-btn'),
   ledgerStatus: $('ledger-status'),
+  skipCap: $('skip-cap'),
   candidateCount: $('candidate-count'),
   card: $('result-card'),
   name: $('result-name'),
@@ -335,11 +336,20 @@ function reportFeedback(dishId, kind, action) {
   try { agg.enqueue({ dishId, kind, action }); } catch { /* 上报永远不影响本地功能 */ }
 }
 
-/** 跳过：点了推荐却把上一道换掉、且当时没有表态 */
+/**
+ * 「重新推荐」记一次跳过（**带当日上限**，见 logic.js 的 SKIP_DAILY_CAP）。
+ * 返回 true 表示这次真的计入了降权；false = 今日额度用完，只换菜。
+ */
 function recordSkip(row) {
   if (row.acted.hearts || row.acted.downs) return false;   // 已经表过态，不再惩罚
-  commitLedger((fresh) => ledgerAdd(fresh, row.id, 'skips'));
-  return true;
+  let counted = false;
+  commitLedger((fresh) => {
+    const before = skipsToday(fresh);
+    const next = ledgerAddSkip(fresh, row.id, Date.now());
+    counted = skipsToday(next) > before;
+    return next;
+  });
+  return counted;
 }
 
 /**
@@ -467,7 +477,14 @@ function recommend(opts = {}) {
 
   const now = Date.now();
   const previous = history[0];
-  if (reroll && previous) recordSkip(previous);          // 「重新推荐」才记跳过
+  if (reroll && previous) {
+    const counted = recordSkip(previous);          // 「重新推荐」才记跳过，且带当日上限
+    if (dom.ledgerStatus) {
+      dom.ledgerStatus.textContent = counted
+        ? ''
+        : `今天「重新推荐」的降权次数已用完（${SKIP_DAILY_CAP} 次），继续换菜不影响权重`;
+    }
+  }
 
   const mergeable = previous
     && now - previous.at < MERGE_MS
@@ -592,6 +609,8 @@ window.addEventListener('storage', (event) => {
   if (dom.dataDate) {
     dom.dataDate.textContent = `数据更新：${String(DATA_META.generatedAt || '').slice(0, 10)}`;
   }
+  // 注解里的限额从代码取，避免「文案写 12、实现改成 8」这种脱节
+  if (dom.skipCap) dom.skipCap.textContent = String(SKIP_DAILY_CAP);
 
   renderAllControls();
   updateCandidateCount();

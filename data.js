@@ -5,12 +5,12 @@
  *     node tools/import-menu.mjs      （从 xlsx 重建菜品/权重基准）
  *     node tools/build-data.mjs       （把库编译成这个文件）
  *
- * 生成时间：2026-10-11T10:05:35.323Z
+ * 生成时间：2026-10-11T13:50:49.005Z
  * 数据规模：576 道菜 / 12 家店
  */
 
 export const DATA_META = {
-  "generatedAt": "2026-10-11T10:05:35.323Z",
+  "generatedAt": "2026-10-11T13:50:49.005Z",
   "dishCount": 576,
   "storeCount": 12,
   "priceTiers": [
@@ -56,7 +56,7 @@ export const DATA_META = {
     "noteMild": 2,
     "heartNominal": 1,
     "downStep": 2,
-    "skipStep": 0.5,
+    "skipStep": 0.25,
     "skipFloorRatio": 0.4,
     "capRatio": 3
   }

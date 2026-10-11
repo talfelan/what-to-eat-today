@@ -92,7 +92,9 @@
     </div>
 
     <p class="tiny-note">点亮红心能提高下次推荐的概率，点亮差评会降低</p>
-    <p class="tiny-note">「重新推荐」＝不想吃它，会降权；再点「推荐一道」只是换一道，权重不动</p>
+    <p class="tiny-note">「重新推荐」＝不想吃它，轻降权（每天限
+      <span id="skip-cap">12</span> 次）；「推荐一道」再点只换一道，权重不动</p>
+    <p class="ledger-status" id="ledger-status" aria-live="polite"></p>
   </section>
 
   <!-- 六 · 推荐记录与反馈 -->
@@ -103,9 +105,8 @@
       <ol id="history-list" class="history-list"></ol>
       <p id="history-empty" class="history-empty">还没有推荐记录，先去点一下按钮吧。</p>
     </div>
-    <p class="tiny-note">数据仅绑定单一浏览器，不同浏览器的数据不互通 ·
+    <p class="tiny-note">数据仅绑定单一浏览器，不同浏览器的数据不互通；匿名汇总只用于统计，不回灌任何人的权重 ·
       <button id="ledger-reset-btn" class="link-btn" type="button">好感重置</button>
-      <span id="ledger-status" class="ledger-status" aria-live="polite"></span>
     </p>
   </section>
 

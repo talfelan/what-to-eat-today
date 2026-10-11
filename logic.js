@@ -230,6 +230,31 @@ export function ledgerResetRecent(ledger, days = LEDGER_RESET_DAYS, when = Date.
   return next;
 }
 
+/** 一天最多有多少次「重新推荐」真正计入降权（超出只换菜） */
+export const SKIP_DAILY_CAP = 12;
+
+/**
+ * 「重新推荐」记一次跳过，**带当日上限**：一天最多 12 次真正计入降权，
+ * 超出的仍然换菜（推荐结果照刷）、也照样进推荐记录，但**不再继续压低权重**。
+ *
+ * 为什么要有这道闸：手快连点「重新推荐」时，过去的实现会让一批菜在几十秒内一起掉到地板，
+ * 权重更迭速度远超用户真实偏好的变化速度。上限让「今天不想吃」的累积效应有边界。
+ */
+export function ledgerAddSkip(ledger, dishId, when = Date.now(), cap = SKIP_DAILY_CAP) {
+  const clean = normalizeLedger(ledger, when);
+  const today = clean.days[ledgerDay(when)] || { hearts: {}, downs: {}, skips: {} };
+  const used = Object.values(today.skips).reduce((a, b) => a + b, 0);
+  if (used >= cap) return clean;              // 今日额度用完：只换菜，不再降权
+  return ledgerAdd(clean, dishId, 'skips', when);
+}
+
+/** 今天已经计入过多少次「重新推荐」（页面用来提示额度） */
+export function skipsToday(ledger, when = Date.now()) {
+  const clean = normalizeLedger(ledger, when);
+  const today = clean.days[ledgerDay(when)];
+  return today ? Object.values(today.skips).reduce((a, b) => a + b, 0) : 0;
+}
+
 /** 只保留库里还存在的菜，并按 LEDGER_KEEP_DAYS 丢掉过老的桶（防止账本无限膨胀） */
 export function ledgerPrune(ledger, dishes, { keepDays = LEDGER_KEEP_DAYS, when = Date.now() } = {}) {
   const alive = new Set((Array.isArray(dishes) ? dishes : []).map((d) => d.id));
