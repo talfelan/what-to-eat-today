@@ -126,10 +126,10 @@
   <ol id="history-full-list" class="history-list"></ol>
 </div>
 
-<!-- 匿名聚合上报的端点配置：**留空 = 完全空转**（线上在你部署函数之前，一个字节都不发）。
-     部署完 netlify/functions/feedback.mjs 之后，把它的地址填进下面的 endpoint，
-     例如 https://<你的站点>.netlify.app/.netlify/functions/feedback -->
-<script>window.WHAT_TO_EAT_AGGREGATE = { endpoint: '' };</script>
+<!-- 匿名聚合上报的端点配置：**留空 = 完全空转**（一个字节都不发）。
+     现在指向 Cloudflare Worker（D1 存储，免费额度 10 万写/天）：
+     worker/worker.js · 看板页 dashboard.html · 本地跑 node worker/dev-server.mjs -->
+<script>window.WHAT_TO_EAT_AGGREGATE = { endpoint: 'https://what-to-eat-feedback.talfelan.workers.dev/report' };</script>
 <script src="aggregate.js"></script>
 <script type="module" src="app.js"></script>
 </body>
