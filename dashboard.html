@@ -62,6 +62,9 @@
         <option value="90">最近 90 天</option>
       </select>
       <button id="btn-refresh" type="button">刷新</button>
+      <label class="muted" style="display:inline-flex;align-items:center;gap:6px" title="页面保持可见时每 30 秒自动拉一次；切到后台会暂停，回到前台立刻补一次">
+        <input type="checkbox" id="chk-auto" checked> 自动刷新
+      </label>
       <button id="btn-csv" type="button">导出 CSV</button>
       <button id="btn-selectall" type="button">全选</button>
       <button id="btn-selectnone" type="button">全不选</button>
@@ -70,6 +73,7 @@
       <button id="btn-logout" type="button">退出口令</button>
     </div>
     <p class="status" id="status" role="status" aria-live="polite"></p>
+    <p class="muted" id="last-updated"></p>
   </div>
 
   <div class="card">
@@ -116,6 +120,26 @@
     return 'https://what-to-eat-feedback.talfelan.workers.dev/report';
   })();
   const getToken = () => localStorage.getItem(LS.token) || '';
+
+  /* 自动刷新（2026-10-12 加）：页面开着就每 30 秒拉一次；切到后台暂停、回到前台立刻补一次。
+     为什么要有它：看板原先只在「加载 / 点刷新 / 换天数」时取数 —— 页面开着不动就永远停在打开那一刻，
+     于是「学生刚点完红心，看板还是老数字」。实测后端写→读 ≤1 秒，所以问题在页面没再去问，不是数据慢。 */
+  const AUTO_KEY = 'whatToEat.dash.auto';
+  const AUTO_MS = 30000;
+  let autoTimer = null;
+  const autoOn = () => { const el = $('chk-auto'); return el ? el.checked : false; };
+  function stopAuto() { if (autoTimer) { clearInterval(autoTimer); autoTimer = null; } }
+  function startAuto() {
+    stopAuto();
+    if (!autoOn()) return;
+    autoTimer = setInterval(() => { if (!document.hidden) fetchData(); }, AUTO_MS);
+  }
+  function stampUpdated() {
+    const el = $('last-updated');
+    if (!el) return;
+    const t = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    el.textContent = `最后更新：${t}（${autoOn() ? `每 ${AUTO_MS / 1000} 秒自动刷新` : '自动刷新已关，点「刷新」取最新'}）`;
+  }
 
   /* 兼容 Netlify 那套习惯：可用 #token=…&endpoint=… 进来一次（用完立即从地址栏抹掉，不留痕） */
   function absorbHash() {
@@ -229,6 +253,7 @@
       renderChart();
       renderTable();
       setStatus(`共 ${rows.length} 道菜有反馈（窗口 ${days} 天）`);
+      stampUpdated();
     } catch (e) { setStatus('网络或跨域失败：' + (e && e.message)); }
   }
 
@@ -269,6 +294,7 @@
     $('main').style.display = 'block';
     $('sel-days').value = localStorage.getItem(LS.days) || '7';
     fetchData();
+    startAuto();
   }
 
   $('btn-enter').addEventListener('click', () => {
@@ -280,6 +306,14 @@
     showMain();
   });
   $('btn-refresh').addEventListener('click', fetchData);
+  $('chk-auto').addEventListener('change', () => {
+    try { localStorage.setItem(AUTO_KEY, $('chk-auto').checked ? '1' : '0'); } catch { /* 隐私模式：只影响记忆，不影响本次 */ }
+    if ($('chk-auto').checked) { fetchData(); startAuto(); } else { stopAuto(); stampUpdated(); }
+  });
+  // 切回这个标签页时立刻补一次：后台期间不轮询（省请求也省电），回来时数据是新的
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && autoOn() && $('main').style.display !== 'none') fetchData();
+  });
   $('btn-csv').addEventListener('click', exportCsv);
   $('sel-days').addEventListener('change', fetchData);
   $('chk-all').addEventListener('change', (e) => { boxes().forEach((b) => { b.checked = e.target.checked; }); updateButtons(); });
@@ -296,6 +330,7 @@
     del({ all: true });
   });
   $('btn-logout').addEventListener('click', () => {
+    stopAuto();
     localStorage.removeItem(LS.token);
     localStorage.removeItem(LS.endpoint);
     $('in-endpoint').value = '';
@@ -307,6 +342,7 @@
 
   loadNames();
   absorbHash();
+  if (localStorage.getItem(AUTO_KEY) === '0') $('chk-auto').checked = false;  // 记住上次的自动刷新开关
   if (!getEndpoint()) localStorage.setItem(LS.endpoint, DEFAULT_ENDPOINT);   // 端点自动就位
   $('in-endpoint').value = getEndpoint();
   if (getToken()) showMain();                                               // 有口令就直接进，不再问第二次
