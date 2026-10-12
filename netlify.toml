@@ -1,11 +1,12 @@
-# 这份 netlify.toml 供「Netlify 从 GitHub 仓库自动构建」使用。
-# 与项目根目录那份的区别：这里仓库根目录就是站点根，所以 publish = "."；
-# 项目根那份是给本地 CLI 部署用的（publish = "public"），由 deploy-netlify.bat 调用。
+# ⚠️ 弃子模块的构建配置（2026-10-12 定性：Netlify 已弃用）。
+# 现役反馈链路 = 站点（GitHub Pages）→ Cloudflare Worker → D1 → Worker 看板。
+# 这份 netlify.toml 供「Netlify 从 GitHub 仓库自动构建」使用：仓库根目录就是站点根，所以 publish = ".";
+# 与项目根目录那份的区别：项目根那份给本地 CLI 部署用（publish = "public"），由 deploy-netlify.bat 调用。
 [build]
   publish = "."
   functions = "netlify/functions"
 
-# 固定网址：/dashboard → 运营者看板
+# 固定网址：/dashboard → 旧看板函数（它随后 302 跳到现役 Cloudflare 看板）
 [[redirects]]
   from = "/dashboard"
   to = "/.netlify/functions/operator"

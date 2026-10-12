@@ -2,7 +2,7 @@
   "name": "what-to-eat-today-site",
   "private": true,
   "type": "module",
-  "description": "公网发布树（站点文件 + Netlify 函数）。改动请改上游工程再 build-public.mjs 重新生成。",
+  "description": "公网发布树（网页本体 + 看板 + 菜名映射；另携带 Netlify 弃子模块的构建文件）。改动请改上游工程再 build-public.mjs 重新生成。",
   "dependencies": {
     "@netlify/blobs": "11.1.4"
   }

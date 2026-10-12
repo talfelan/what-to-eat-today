@@ -6,8 +6,14 @@
  *   2) **事件最小化**：只发 {v, dishId, kind, day, tz}；不含设备 id、cookie、IP、UA、点击序列。
  *   3) **失败静默**：离线 / DNT / 网络失败一律直接丢弃，不重试、不排队、不阻塞 UI。
  *
- * **默认空转**：端点没配置（WHAT_TO_EAT_AGGREGATE.endpoint 为空）时，一个字节都不发 ——
- * 线上站点在你部署完函数之前，行为与本模块不存在时完全一致。
+ * **默认空转**：端点没配置（WHAT_TO_EAT_AGGREGATE.endpoint 为空）时，一个字节都不发。
+ *
+ * **后端无关（2026-10-12 做的隔离）**：本模块**不认识任何后端** —— 端点只从显式配置读，
+ * 绝不按宿主名（netlify.app / workers.dev / …）去推断该往哪发。
+ * 为什么拆掉这条兜底：按宿主推断等于把两条反馈链耦合在客户端里，一方改名/停用/断连会**静默**
+ * 改变另一方的去向（真实事故：Netlify 副本的 endpoint 为空，兜底把它指到了已停用的旧函数，
+ * 那批学生的红心全进了另一个库，看板一直看不到）。
+ * 现役后端 = Cloudflare Worker（见 `worker/`）；`netlify/` 是弃子模块，客户端不再提它。
  *
  * 关掉上报：localStorage 里把 whatToEat.aggregate.optOut 设成 '1'（页面上有开关）。
  */
@@ -15,21 +21,19 @@
   const CFG = (root && root.WHAT_TO_EAT_AGGREGATE) || {};
 
   /**
-   * 端点解析，三条规则依次判断：
-   *   1) **显式配置优先**：window.WHAT_TO_EAT_AGGREGATE.endpoint 有值就用它（本地联调指到 8888 那种）；
-   *   2) **部署在 Netlify 上就自动指到本站的 feedback 函数**（含 deploy preview / 分支部署，各自指向自己那一份）；
-   *   3) **其它环境一律空转**：file:// 直开、局域网 server.js、GitHub Pages 都保持空 —— 一个字节都不发。
+   * 端点解析：**只有一条规则** —— 显式配置 `window.WHAT_TO_EAT_AGGREGATE.endpoint` 有值就用它，
+   * 没有就空转（一个字节都不发）。
+   *
+   * 为什么不按宿主推断（这里曾经有过第二条规则「部署在 Netlify 上就自动指到本站函数」）：
+   * 那会让客户端同时认识两条反馈链，任何一侧改名、停用或断连都会**静默改变另一侧的归属**。
+   * 想让某个页面指向某个后端，就在它的 index.html 里写死那个端点 ——
+   * **配置是唯一的耦合点**，看得见、可 diff、可回滚。
    * 每次发送前重新解析，所以改配置立刻生效。
    */
   function resolveEndpoint() {
     const cfg = (root && root.WHAT_TO_EAT_AGGREGATE) || CFG;
-    if (typeof cfg.endpoint === 'string' && cfg.endpoint.trim()) return cfg.endpoint.trim();
-    try {
-      if (/(^|\.)netlify\.app$/i.test(root.location.hostname)) {
-        return `${root.location.origin}/.netlify/functions/feedback`;
-      }
-    } catch { /* 没有 location（测试环境）：按空转处理 */ }
-    return '';
+    const raw = cfg && cfg.endpoint;
+    return typeof raw === 'string' ? raw.trim() : '';
   }
   let ENDPOINT = resolveEndpoint();
   const OPT_OUT_KEY = 'whatToEat.aggregate.optOut';

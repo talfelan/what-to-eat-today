@@ -1,6 +1,16 @@
 /**
  * netlify/functions/feedback.mjs —— 匿名反馈的**写入端点**（只进不出）
  *
+ * ⚠️ **已弃用（2026-10-12 定性为弃子）**：现役反馈链路只有一条 ——
+ *   站点（GitHub Pages）→ Cloudflare Worker → D1 → Worker 看板（见 `worker/`）。
+ * 本模块（Netlify Functions + Netlify Blobs）**不再接收任何新反馈、也不再被任何看板读取**：
+ * 平台额度用尽后每次部署都被拒（部署记录原文「Skipped due to account credit usage exceeded」），
+ * 线上停在一个 `endpoint` 为空的旧构建。保留它只为两件事：① 历史数据仍可用 `?data=1` + 旧口令读；
+ * ② 实现留档。
+ * 它的自检是 `tools/verify-netlify-legacy.mjs`，**故意不进** `tools/verify-all.mjs`：
+ * 一侧坏掉或断连，不该让另一侧变红。彻底退役只需删 `netlify/`、`netlify.toml`、
+ * 三个 netlify 相关 `.bat` 与那个自检文件，现役链路一行都不用改。
+ *
  * 三条纪律（与 docs/10-云端匿名反馈库方案-待批.md 一一对应）：
  *   1) **只写不读**：本函数永远不回业务数据（成功 204、失败 4xx，体里没有任何计数）。
  *   2) **事件最小化**：只接受 {v, dishId, kind, day, tz}；不收设备 id、不落 IP、不落 UA、不设 cookie。
